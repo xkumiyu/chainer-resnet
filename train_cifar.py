@@ -1,4 +1,5 @@
 import os
+import random
 
 import matplotlib
 try:
@@ -17,7 +18,7 @@ from models.resnet import ResNet
 
 
 def main():
-    parser = generate_parser(batchsize=128, epoch=300)
+    parser = generate_parser(batchsize=128, epoch=200)
     parser.add_argument('--dataset', '-d', default='cifar10', choices=['cifar10', 'cifar100'],
                         help='The dataset to use: cifar10 or cifar100')
     parser.add_argument('--n_layers', '-l', type=int,
@@ -37,6 +38,26 @@ def main():
         print('Using CIFAR100 dataset.')
         class_labels = 100
         train, test = chainer.datasets.get_cifar100()
+
+    def data_augment(data):
+        image, label = data
+        xp = chainer.cuda.get_array_module(image)
+
+        # after 0 padding, image.shape = (3, 40, 40)
+        image = xp.pad(image, ((0, 0), (4, 4), (4, 4)), 'constant', constant_values=(0, 0))
+        _, h, w = image.shape
+        crop_size = 32
+
+        top = random.randint(0, h - crop_size - 1)
+        left = random.randint(0, w - crop_size - 1)
+        if random.randint(0, 1):
+            image = image[:, :, ::-1]
+        bottom = top + crop_size
+        right = left + crop_size
+
+        image = image[:, top:bottom, left:right]
+        return image, label
+    train = chainer.datasets.TransformDataset(train, data_augment)
 
     # Setup iterators
     train_iter = chainer.iterators.SerialIterator(train, args.batchsize)
@@ -60,16 +81,16 @@ def main():
     display_interval = (args.display_interval, 'iteration')
     snapshot_interval = (args.snapshot_interval, 'iteration')
 
-    trainer.extend(extensions.LinearShift('lr', (10e-2, 10e-3), (1, 32e3)))
-    trainer.extend(extensions.LinearShift('lr', (10e-3, 10e-4), (32e3, 48e3)))
-    trainer.extend(extensions.LinearShift('lr', (10e-4, 10e-5), (48e3, 64e3)))
+    # trainer.extend(extensions.LinearShift('lr', (10e-3, 10e-4), (48000, 48001)))
+    # trainer.extend(extensions.LinearShift('lr', (10e-2, 10e-3), (32000, 32001)))
+    trainer.extend(extensions.ExponentialShift('lr', 0.1), trigger=(16000, 'iteration'))
 
     trainer.extend(extensions.Evaluator(
         test_iter, model, device=args.gpu), trigger=display_interval)
     trainer.extend(extensions.LogReport(trigger=display_interval))
     trainer.extend(extensions.observe_lr(), trigger=display_interval)
     trainer.extend(extensions.PrintReport(
-        ['epoch', 'lr', 'main/loss', 'validation/main/loss',
+        ['epoch', 'iteration', 'lr', 'main/loss', 'validation/main/loss',
          'main/accuracy', 'validation/main/accuracy', 'elapsed_time']))
     if extensions.PlotReport.available():
         trainer.extend(extensions.PlotReport(
