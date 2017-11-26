@@ -17,11 +17,11 @@ from models.resnet import ResNet
 
 
 def main():
-    parser = generate_parser(batchsize=64, epoch=300)
+    parser = generate_parser(batchsize=128, epoch=300)
     parser.add_argument('--dataset', '-d', default='cifar10', choices=['cifar10', 'cifar100'],
                         help='The dataset to use: cifar10 or cifar100')
     parser.add_argument('--n_layers', '-l', type=int,
-                        default=20, choices=[20, 32, 44, 56, 110],
+                        default=20, choices=[20, 32, 44, 56, 110, 1202],
                         help='Number of layers for ResNet')
     args = parser.parse_args()
 
@@ -49,9 +49,9 @@ def main():
         model.to_gpu()
 
     # Setup an optimizer
-    optimizer = chainer.optimizers.MomentumSGD(0.05)
+    optimizer = chainer.optimizers.MomentumSGD(0.1)
     optimizer.setup(model)
-    optimizer.add_hook(chainer.optimizer.WeightDecay(5e-4))
+    optimizer.add_hook(chainer.optimizer.WeightDecay(10e-5))
 
     # Set up a trainer
     updater = training.StandardUpdater(train_iter, optimizer, device=args.gpu)
@@ -60,7 +60,9 @@ def main():
     display_interval = (args.display_interval, 'iteration')
     snapshot_interval = (args.snapshot_interval, 'iteration')
 
-    trainer.extend(extensions.LinearShift('lr', (0.05, 0.01), (10e3, 10e4)))
+    trainer.extend(extensions.LinearShift('lr', (10e-2, 10e-3), (1, 32e3)))
+    trainer.extend(extensions.LinearShift('lr', (10e-3, 10e-4), (32e3, 48e3)))
+    trainer.extend(extensions.LinearShift('lr', (10e-4, 10e-5), (48e3, 64e3)))
 
     trainer.extend(extensions.Evaluator(
         test_iter, model, device=args.gpu), trigger=display_interval)

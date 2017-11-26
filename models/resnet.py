@@ -31,6 +31,8 @@ class ResNet(chainer.Chain):
             block = [9, 9, 9]
         elif n_layers == 110:
             block = [18, 18, 18]
+        elif n_layers == 1202:
+            block = [200, 200, 200]
         else:
             raise
 
@@ -42,7 +44,7 @@ class ResNet(chainer.Chain):
                 self.res3 = BasicBlock(block[1], 128)
                 self.res4 = BasicBlock(block[2], 256)
                 self.res5 = BasicBlock(block[3], 512)
-            elif n_layers in [20, 32, 44, 56, 110]:
+            elif n_layers in [20, 32, 44, 56, 110, 1202]:
                 self.conv1 = L.Convolution2D(3, 16, 7, 2, 3, initialW=w)
                 self.bn1 = L.BatchNormalization(16)
                 self.res2 = BasicBlock(block[0], 16, 1)
@@ -81,11 +83,11 @@ class ResNet(chainer.Chain):
 
 class BasicBlock(chainer.ChainList):
 
-    def __init__(self, layer, ch, stride=2):
+    def __init__(self, n_blocks, ch, stride=2):
         super(BasicBlock, self).__init__()
         with self.init_scope():
             self.add_link(BasicA(ch, stride))
-            for i in range(layer - 1):
+            for i in range(n_blocks - 1):
                 self.add_link(BasicB(ch))
 
     def __call__(self, x):
@@ -96,10 +98,10 @@ class BasicBlock(chainer.ChainList):
 
 class BottleNeckBlock(chainer.ChainList):
 
-    def __init__(self, layer, in_size, ch, out_size, stride=2):
+    def __init__(self, n_blocks, in_size, ch, out_size, stride=2):
         super(BottleNeckBlock, self).__init__()
         self.add_link(BottleNeckA(in_size, ch, out_size, stride))
-        for i in range(layer - 1):
+        for i in range(n_blocks - 1):
             self.add_link(BottleNeckB(out_size, ch))
 
     def __call__(self, x):
@@ -115,18 +117,18 @@ class BasicA(chainer.Chain):
         w = chainer.initializers.HeNormal()
 
         with self.init_scope():
-            self.conv1 = L.Convolution2D(None, ch, 3, stride, 1, initialW=w, nobias=True)
-            self.bn1 = L.BatchNormalization(ch)
+            self.conv1a = L.Convolution2D(None, ch, 3, stride, 1, initialW=w, nobias=True)
+            self.bn1a = L.BatchNormalization(ch)
             self.conv2 = L.Convolution2D(None, ch, 3, 1, 1, initialW=w, nobias=True)
             self.bn2 = L.BatchNormalization(ch)
 
-            self.conv3 = L.Convolution2D(None, ch, 3, stride, 1, initialW=w, nobias=True)
-            self.bn3 = L.BatchNormalization(ch)
+            self.conv1b = L.Convolution2D(None, ch, 3, stride, 1, initialW=w, nobias=True)
+            self.bn1b = L.BatchNormalization(ch)
 
     def __call__(self, x):
-        h1 = F.relu(self.bn1(self.conv1(x)))
+        h1 = F.relu(self.bn1a(self.conv1a(x)))
         h1 = self.bn2(self.conv2(h1))
-        h2 = self.bn3(self.conv3(x))
+        h2 = self.bn1b(self.conv1b(x))
 
         return F.relu(h1 + h2)
 
@@ -157,9 +159,9 @@ class BottleNeckA(chainer.Chain):
         w = chainer.initializers.HeNormal()
 
         with self.init_scope():
-            self.conv1 = L.Convolution2D(
+            self.conv1a = L.Convolution2D(
                 in_size, ch, 1, stride, 0, initialW=w, nobias=True)
-            self.bn1 = L.BatchNormalization(ch)
+            self.bn1a = L.BatchNormalization(ch)
             self.conv2 = L.Convolution2D(
                 ch, ch, 3, 1, 1, initialW=w, nobias=True)
             self.bn2 = L.BatchNormalization(ch)
@@ -167,16 +169,16 @@ class BottleNeckA(chainer.Chain):
                 ch, out_size, 1, 1, 0, initialW=w, nobias=True)
             self.bn3 = L.BatchNormalization(out_size)
 
-            self.conv4 = L.Convolution2D(
+            self.conv1b = L.Convolution2D(
                 in_size, out_size, 1, stride, 0,
                 initialW=w, nobias=True)
-            self.bn4 = L.BatchNormalization(out_size)
+            self.bn1b = L.BatchNormalization(out_size)
 
     def __call__(self, x):
-        h1 = F.relu(self.bn1(self.conv1(x)))
+        h1 = F.relu(self.bn1a(self.conv1a(x)))
         h1 = F.relu(self.bn2(self.conv2(h1)))
         h1 = self.bn3(self.conv3(h1))
-        h2 = self.bn4(self.conv4(x))
+        h2 = self.bn1b(self.conv1b(x))
 
         return F.relu(h1 + h2)
 

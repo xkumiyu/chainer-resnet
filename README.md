@@ -7,7 +7,7 @@ Chainer implementation of [Deep Residual Learning for Image Recognition](https:/
 * for insize = 224 (ex. imagenet)
   * 18, 34, 50, 101, 152
 * for insize = 34 (ex. cifar)
-  * 20, 32, 44, 56, 110
+  * 20, 32, 44, 56, 110, 1202
 
 # Example for training cifar10 dataset
 
