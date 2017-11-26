@@ -17,7 +17,7 @@ from models.resnet import ResNet
 
 
 def main():
-    parser = generate_parser(snapshot_interval=2000)
+    parser = generate_parser(batchsize=64, epoch=300)
     parser.add_argument('--dataset', '-d', default='cifar10', choices=['cifar10', 'cifar100'],
                         help='The dataset to use: cifar10 or cifar100')
     parser.add_argument('--n_layers', '-l', type=int,
@@ -49,8 +49,9 @@ def main():
         model.to_gpu()
 
     # Setup an optimizer
-    optimizer = chainer.optimizers.MomentumSGD()
+    optimizer = chainer.optimizers.MomentumSGD(0.05)
     optimizer.setup(model)
+    optimizer.add_hook(chainer.optimizer.WeightDecay(5e-4))
 
     # Set up a trainer
     updater = training.StandardUpdater(train_iter, optimizer, device=args.gpu)
@@ -59,11 +60,14 @@ def main():
     display_interval = (args.display_interval, 'iteration')
     snapshot_interval = (args.snapshot_interval, 'iteration')
 
+    trainer.extend(extensions.LinearShift('lr', (0.05, 0.01), (10e3, 10e4)))
+
     trainer.extend(extensions.Evaluator(
         test_iter, model, device=args.gpu), trigger=display_interval)
     trainer.extend(extensions.LogReport(trigger=display_interval))
+    trainer.extend(extensions.observe_lr(), trigger=display_interval)
     trainer.extend(extensions.PrintReport(
-        ['epoch', 'iteration', 'main/loss', 'validation/main/loss',
+        ['epoch', 'lr', 'main/loss', 'validation/main/loss',
          'main/accuracy', 'validation/main/accuracy', 'elapsed_time']))
     if extensions.PlotReport.available():
         trainer.extend(extensions.PlotReport(
